@@ -98,6 +98,12 @@ details.wk summary .pts{font:600 22px/1 var(--display);color:var(--green)}
 details.wk[open] summary{border-bottom:1px solid var(--line)}
 details.wk .tablewrap{border:0;border-radius:0}
 
+h3.sec{font:600 24px/1.1 var(--display);margin:28px 0 10px;letter-spacing:.01em}
+h3.sec:first-child{margin-top:0}
+.box{padding:12px 16px;border-radius:4px;margin-bottom:16px;border:1px solid var(--line);background:var(--paper)}
+.box.warn{border-color:var(--red)}
+.box ul{margin:6px 0 0 18px;padding:0}
+.legnote{margin:8px 0 0;font-size:13px;color:var(--muted)}
 .playerpick{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;margin-bottom:14px}
 .playerpick label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:2px}
 .playerpick select{padding:7px 10px;border:1px solid var(--line);border-radius:3px;background:#fff;min-width:170px;font-size:16px}
@@ -140,7 +146,7 @@ details.wk .tablewrap{border:0;border-radius:0}
     <button type="submit">Ask</button>
   </form>
   <ul class="examples" id="examples"></ul>
-  <p class="hint">Answers come straight from the spreadsheet: tons, 180s, 100+ checkouts, MVP, appearances and fixtures. Name a player, week, team or home/away to narrow it down.</p>
+  <p class="hint">Answers come straight from the spreadsheet: tons, 180s, 100+ checkouts, leg wins, MVP, appearances and fixtures. Name a player, week, team or home/away to narrow it down.</p>
   <div id="answer" aria-live="polite"></div>
 </section>
 
@@ -156,6 +162,7 @@ details.wk .tablewrap{border:0;border-radius:0}
 <div class="tabs" role="tablist" id="tabs">
   <button role="tab" data-tab="board" aria-selected="true">Leaderboard</button>
   <button role="tab" data-tab="mvp" aria-selected="false">MVP by week</button>
+  <button role="tab" data-tab="legs" aria-selected="false">Legs</button>
   <button role="tab" data-tab="player" aria-selected="false">Player</button>
   <button role="tab" data-tab="fixtures" aria-selected="false">Fixtures</button>
 </div>
@@ -188,23 +195,25 @@ function build(raw) {
   const cWeek = ix('Week'), cOpp = ix('Opposition'), cVen = ix('Venue'), cPl = ix('Player');
   const cScore = ['Threes weighted', 'Pairs weighted', 'Singles weighted', '2-0 Bonus point'].map(ix);
   const c180 = ix('180 bonus'), cTonCo = ix('100 + Checkout bonus');
+  const cThr = ix('Threes'), cPai = ix('Pairs'), cSin = ix('Singles');
   const tonCols = [], coCols = [];
   head.forEach((h, i) => { if (/^ton \d+$/.test(h)) tonCols.push(i); if (/^checkout \d+$/.test(h)) coCols.push(i); });
   const val = (row, i) => i < 0 ? 0 : num(row[i]);
 
-  const fixtures = [], seen = new Set(), records = [];
+  const fixtures = [], seen = new Set(), records = [], slotCount = {}, blankRows = [];
   for (const row of raw.slice(1)) {
     const week = Number(row[cWeek]);
     if (!Number.isFinite(week) || week <= 0) continue;
     const opp = String(row[cOpp] ?? '').trim(), venue = String(row[cVen] ?? '').trim();
+    const slot = (slotCount[week] = (slotCount[week] || 0) + 1) - 1;   // row position within the week (0 to 5)
     if (!seen.has(week)) { seen.add(week); fixtures.push({ week, opp, venue, bye: !opp || norm(opp) === 'no game' }); }
     const player = String(row[cPl] ?? '').trim();
-    if (!player) continue;
+    if (!player) { blankRows.push({ week, slot }); continue; }
     const tons = tonCols.map(i => row[i]).filter(v => num(v) > 0).map(num);
     const checkouts = coCols.map(i => num(row[i])).filter(v => v > 0);
     const n180 = Math.round(val(row, c180) / 0.5), tonco = Math.round(val(row, cTonCo) / 0.5);
     const score = r2(cScore.reduce((s, i) => s + val(row, i), 0) + tons.length * 0.1 + val(row, c180) + val(row, cTonCo));
-    records.push({ week, opp, venue, player, tons, checkouts, n180, tonco, score });
+    records.push({ week, opp, venue, player, tons, checkouts, n180, tonco, score, slot, threes: val(row, cThr), pairs: val(row, cPai), singles: val(row, cSin) });
   }
   fixtures.sort((a, b) => a.week - b.week);
   const fixtureByWeek = Object.fromEntries(fixtures.map(f => [f.week, f]));
@@ -215,9 +224,28 @@ function build(raw) {
     const top = ranking[0].score;
     if (top > 0) winners[w] = { names: ranking.filter(r => r.score === top).map(r => r.player), score: top, ranking };
   }
+  // Teams: threes = rows 1-3 and 4-6; pairs = rows 1-2, 3-4 and 5-6. Every member of a winning team is credited with the leg.
+  const issues = [], weekTeams = {};
+  for (const w of playedWeeks) {
+    const rs = records.filter(r => r.week === w).sort((a, b) => a.slot - b.slot);
+    const blanks = blankRows.filter(b => b.week === w);
+    if (blanks.length) issues.push({ week: w, msg: 'Row ' + (blanks[0].slot + 1) + ' of the week has no player name, so teams could not be worked out.' });
+    if (slotCount[w] !== 6) issues.push({ week: w, msg: 'Found ' + slotCount[w] + ' rows for this week instead of 6, so teams could not be worked out.' });
+    if (rs.length !== 6 || slotCount[w] !== 6) continue;
+    const mkTeam = (idx, field, label) => {
+      const mem = idx.map(i => rs[i]), vals = mem.map(m => m[field]), legs = Math.min(...vals);
+      if (!vals.every(v => v === vals[0])) issues.push({ week: w, msg: label + ' (' + mem.map(m => m.player).join(', ') + ') have different leg counts (' + vals.join(', ') + '). Counted as ' + legs + '.' });
+      return { players: mem.map(m => m.player), legs };
+    };
+    weekTeams[w] = {
+      threes: [mkTeam([0, 1, 2], 'threes', 'Threes team 1'), mkTeam([3, 4, 5], 'threes', 'Threes team 2')],
+      pairs: [mkTeam([0, 1], 'pairs', 'Pairs team 1'), mkTeam([2, 3], 'pairs', 'Pairs team 2'), mkTeam([4, 5], 'pairs', 'Pairs team 3')],
+      singles: rs.reduce((s, m) => s + m.singles, 0),
+    };
+  }
   const players = [...new Set(records.map(r => r.player))].sort();
   const opponents = [...new Set(fixtures.filter(f => !f.bye && playedWeeks.includes(f.week)).map(f => f.opp))].sort();
-  return { fixtures, fixtureByWeek, records, playedWeeks, winners, players, opponents,
+  return { fixtures, fixtureByWeek, records, playedWeeks, winners, players, opponents, weekTeams, issues,
            latestWeek: playedWeeks.length ? playedWeeks[playedWeeks.length - 1] : 0,
            totalMatches: fixtures.filter(f => !f.bye).length };
 }
@@ -232,14 +260,38 @@ function aggregate(recs, D) {
   const m = new Map();
   for (const r of recs) {
     let a = m.get(r.player);
-    if (!a) { a = { player: r.player, apps: 0, tons: 0, scores: [], best: 0, n180: 0, tonco: 0, points: 0, mvp: 0, mvpWeeks: [] }; m.set(r.player, a); }
+    if (!a) { a = { player: r.player, apps: 0, tons: 0, scores: [], best: 0, n180: 0, tonco: 0, points: 0, mvp: 0, mvpWeeks: [], threes: 0, pairs: 0, singles: 0, legs: 0 }; m.set(r.player, a); }
     a.apps++; a.tons += r.tons.length; a.scores.push(...r.tons);
+    a.threes += r.threes; a.pairs += r.pairs; a.singles += r.singles; a.legs += r.threes + r.pairs + r.singles;
     a.best = Math.max(a.best, ...r.tons); a.n180 += r.n180; a.tonco += r.tonco; a.points += r.score;
     const w = D.winners[r.week];
     if (w && w.names.includes(r.player)) { a.mvp++; a.mvpWeeks.push(r.week); }
   }
   for (const a of m.values()) { a.points = r2(a.points); a.perMatch = a.apps ? r2(a.tons / a.apps) : 0; }
   return [...m.values()];
+}
+
+function legsForWeek(w, D) {
+  const t = D.weekTeams[w]; if (!t) return null;
+  const threes = t.threes.reduce((s, x) => s + x.legs, 0), pairs = t.pairs.reduce((s, x) => s + x.legs, 0);
+  return { threes, pairs, singles: t.singles, total: threes + pairs + t.singles };
+}
+function teamStats(weeks, D) {
+  const r = { threes: 0, pairs: 0, singles: 0, total: 0, pairList: [], threesList: [] };
+  const pm = new Map(), tm = new Map();
+  const add = (map, x) => {
+    const names = x.players.slice().sort(), key = names.join('|');
+    const g = map.get(key) || { names, legs: 0, times: 0 }; g.legs += x.legs; g.times++; map.set(key, g);
+  };
+  for (const w of weeks) {
+    const t = D.weekTeams[w]; if (!t) continue;
+    const l = legsForWeek(w, D); r.threes += l.threes; r.pairs += l.pairs; r.singles += l.singles;
+    t.threes.forEach(x => add(tm, x)); t.pairs.forEach(x => add(pm, x));
+  }
+  r.total = r.threes + r.pairs + r.singles;
+  const order = (a, b) => b.legs - a.legs || b.times - a.times || a.names.join().localeCompare(b.names.join());
+  r.pairList = [...pm.values()].sort(order); r.threesList = [...tm.values()].sort(order);
+  return r;
 }
 
 /* ============ natural-language questions ============ */
@@ -249,8 +301,15 @@ const METRICS = {
   tonco:  { label: '100+ checkouts', get: a => a.tonco },
   points: { label: 'MVP points',    get: a => a.points },
   apps:   { label: 'appearances',   get: a => a.apps },
+  threes: { label: 'threes leg wins', get: a => a.threes },
+  pairs:  { label: 'pairs leg wins',  get: a => a.pairs },
+  singles:{ label: 'singles leg wins', get: a => a.singles },
+  legs:   { label: 'leg wins',      get: a => a.legs },
 };
-const ONE = { ton: 'ton', n180: '180', tonco: '100+ checkout', points: 'MVP point', apps: 'appearance' };
+const ONE = { ton: 'ton', n180: '180', tonco: '100+ checkout', points: 'MVP point', apps: 'appearance', threes: 'threes leg win', pairs: 'pairs leg win', singles: 'singles leg win', legs: 'leg win' };
+const LEGWORD = { threes: 'threes legs', pairs: 'pairs legs', singles: 'singles legs', legs: 'legs' };
+const LEGONE = { threes: 'threes leg', pairs: 'pairs leg', singles: 'singles leg', legs: 'leg' };
+const legWord = (key, n) => n === 1 ? LEGONE[key] : LEGWORD[key];
 const lead = names => names.length <= 2 ? names.join(' & ') : names.length + '-way tie';
 const esc_re = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -304,10 +363,13 @@ function ask(q, D) {
   const isCheckout = has(/check ?outs?/);
   const isTon = has(/\btons?\b|\b100s\b|hundreds?|centur/);
   const isPoints = has(/\bpoints?\b/);
+  const isThrees = has(/\bthrees?\b/), isPairs = has(/\bpairs?\b|\bdoubles?\b/), isSingles = has(/\bsingles?\b/), isLegs = has(/\blegs?\b/);
   const isWho = has(/\bwho\b|\bwhich player\b|\bmost\b|\btop\b|\bleader\b|\bleading\b|\bbest\b|\bhighest\b/);
   const isHigh = has(/\b(highest|biggest|best) (single )?(ton|tons|score|visit|three dart)/);
   let mk = null;
-  if (is180) mk = 'n180'; else if (isCheckout) mk = 'tonco'; else if (isTon) mk = 'ton'; else if (isPoints) mk = 'points';
+  if (is180) mk = 'n180'; else if (isCheckout) mk = 'tonco';
+  else if (isThrees) mk = 'threes'; else if (isPairs) mk = 'pairs'; else if (isSingles) mk = 'singles'; else if (isLegs) mk = 'legs';
+  else if (isTon) mk = 'ton'; else if (isPoints) mk = 'points';
   if (isMVP) chips.push('MVP'); else if (mk) chips.push(METRICS[mk].label.charAt(0).toUpperCase() + METRICS[mk].label.slice(1));
   let note = null;
   if (!mk && !isMVP && has(/\b(top scorer|highest scorer|scorer|scored the most)\b/)) { mk = 'ton'; note = 'Counting tons. Ask about "MVP points" to rank by points instead.'; }
@@ -377,6 +439,9 @@ function ask(q, D) {
       cols: ['Player', 'Tons', 'Points'], rows: w.ranking.map(r => [r.player, r.tons.length, r.score]), num: [1, 2] });
   }
 
+  /* --- team / partnership questions (pairs and threes) --- */
+  if ((isThrees || isPairs) && has(/together|partner|partnerships?|combinations?|\bduo\b|\btrio\b|\bwhich (pair|pairs|team|teams|threes)\b|\bwho\b.*\bwith\b/)) return teamAnswer(isThrees && !isPairs ? 'threes' : 'pairs');
+
   /* --- highest single ton --- */
   if (isHigh) {
     let list = scoped.flatMap(r => r.tons.map(v => ({ v, r })));
@@ -431,7 +496,7 @@ function ask(q, D) {
       if (!pr.length) return out({ big: '–', headline: p + ' has no recorded appearances ' + scope() + '.' });
       const a = ag.find(x => x.player === p), total = valueOf(a);
       const rows = pr.slice().sort((x, y) => x.week - y.week).map(r => {
-        const v = key === 'ton' ? r.tons.length : key === 'n180' ? r.n180 : key === 'tonco' ? r.tonco : key === 'points' ? r.score : 1;
+        const v = { ton: r.tons.length, n180: r.n180, tonco: r.tonco, points: r.score, apps: 1, threes: r.threes, pairs: r.pairs, singles: r.singles, legs: r.threes + r.pairs + r.singles }[key];
         return [r.week, r.opp + ' (' + r.venue.toLowerCase() + ')', v].concat(key === 'ton' ? [r.tons.join(', ') || '–'] : []);
       });
       const unitOne = ONE[key];
@@ -445,10 +510,22 @@ function ask(q, D) {
       return out({ headline: M.label.charAt(0).toUpperCase() + M.label.slice(1) + ' ' + scope() + '.', note,
         cols: ['Player', 'Played', M.label], rows, num: [1, 2] });
     }
+    if ((key === 'threes' || key === 'pairs' || key === 'legs') && !isWho) {
+      // team totals: each leg counted once, not once per player
+      const ws = [...new Set(scoped.map(r => r.week))].sort((a, b) => a - b);
+      const ts = teamStats(ws, D);
+      const total = key === 'threes' ? ts.threes : key === 'pairs' ? ts.pairs : ts.total;
+      const rows = ws.map(w => { const l = legsForWeek(w, D), fx = D.fixtureByWeek[w]; return [w, fx.opp + ' (' + fx.venue.toLowerCase() + ')', l ? (key === 'threes' ? l.threes : key === 'pairs' ? l.pairs : l.total) : '?']; });
+      const iss = D.issues.filter(i => ws.includes(i.week)).map(i => 'Week ' + i.week + ': ' + i.msg).join(' ');
+      return out({ big: total, unit: legWord(key, total), headline: 'The team has won ' + total + ' ' + legWord(key, total) + ' ' + scope() + '.',
+        note: ['Each team leg is counted once, not once per player.', iss].filter(Boolean).join(' '),
+        cols: ['Week', 'Match', LEGWORD[key].charAt(0).toUpperCase() + LEGWORD[key].slice(1)], rows, num: [0, 2] });
+    }
     const ranked = ag.filter(a => valueOf(a) > 0).sort((a, b) => valueOf(b) - valueOf(a) || a.player.localeCompare(b.player));
     const total = r2(ag.reduce((s, a) => s + valueOf(a), 0));
     if (!ranked.length) return out({ big: 0, unit: M.label, headline: 'No ' + M.label + ' recorded ' + scope() + '.' });
     if (isWho && key !== 'apps' || (isWho && key === 'apps')) {
+      if (!note && (key === 'threes' || key === 'pairs')) note = 'Each player is credited with every leg their team won.';
       const top = valueOf(ranked[0]), leaders = ranked.filter(a => valueOf(a) === top).map(a => a.player);
       return out({ big: lead(leaders), unit: top + ' ' + (top === 1 ? ONE[key] : M.label) + (leaders.length > 2 ? ' each' : ''),
         headline: (leaders.length > 1 ? 'Joint top: ' : '') + leaders.join(' and ') + (leaders.length > 1 ? ' with ' : ' leads with ') + top + ' ' + M.label + ' ' + scope() + '.', note,
@@ -456,6 +533,21 @@ function ask(q, D) {
     }
     return out({ big: total, unit: M.label, headline: 'The team has ' + total + ' ' + M.label + ' ' + scope() + '.', note,
       cols: ['Player', 'Played', M.label], rows: ranked.map(a => [a.player, a.apps, valueOf(a)]), num: [1, 2] });
+  }
+
+  function teamAnswer(kind) {
+    const ws = [...new Set(scoped.map(r => r.week))].sort((a, b) => a - b);
+    const ts = teamStats(ws, D);
+    let list = kind === 'pairs' ? ts.pairList : ts.threesList;
+    if (players.length) list = list.filter(g => players.every(p => g.names.includes(p)));
+    const iss = D.issues.filter(i => ws.includes(i.week)).map(i => 'Week ' + i.week + ': ' + i.msg).join(' ');
+    const what = kind === 'pairs' ? 'pairs' : 'threes';
+    if (!list.length) return out({ big: '–', headline: 'No ' + what + ' teams' + (players.length ? ' including ' + players.join(' and ') : '') + ' ' + scope() + '.', note: iss || null });
+    const top = list[0].legs, leaders = list.filter(g => g.legs === top);
+    const label = g => g.names.join(' & ');
+    return out({ big: leaders.length === 1 ? label(leaders[0]) : leaders.length + '-way tie', unit: top + ' ' + plural(top, 'leg', 'legs'),
+      headline: (players.length ? 'Best ' + what + ' team including ' + players.join(' and ') : 'Most ' + what + ' legs won together') + ' ' + scope() + (leaders.length > 1 ? ': ' + leaders.length + ' teams on ' + top : ': ' + label(leaders[0]) + ', ' + top) + '.',
+      note: iss || null, cols: ['Team', 'Legs won', 'Times together'], rows: list.slice(0, 8).map(g => [label(g), g.legs, g.times]), num: [1, 2] });
   }
 
   function playerSummary(ps, recs) {
@@ -487,7 +579,7 @@ function renderAnswer(a) {
   const box = $('answer');
   let h = '<div class="chips">' + (a.chips || []).map(c => '<span class="chip">' + esc(c) + '</span>').join('') + '</div>';
   if (a.fallback) {
-    h += '<p class="headline">' + esc(a.headline) + '</p><p class="note">Try asking about tons, 180s, MVP, appearances or fixtures, for example:</p>';
+    h += '<p class="headline">' + esc(a.headline) + '</p><p class="note">Try asking about tons, 180s, leg wins, MVP, appearances or fixtures, for example:</p>';
     box.innerHTML = h; box.appendChild(exampleList(EXAMPLES.slice(0, 4))); return;
   }
   if (a.big != null && a.big !== '') {
@@ -507,6 +599,8 @@ const EXAMPLES = [
   'How many times has Ian B been MVP?',
   'Who played in week 3?',
   'Who do we play next?',
+  'How many singles legs has Ian B won?',
+  'Who has won the most pairs legs together?',
 ];
 function exampleList(list) {
   const ul = document.createElement('ul'); ul.className = 'examples';
@@ -576,6 +670,43 @@ function renderMVP(recs) {
   }).join('');
 }
 
+let legSort = { key: 'legs', dir: -1 };
+const LCOLS = [
+  { k: 'player', t: 'Player', txt: true }, { k: 'apps', t: 'Played' }, { k: 'threes', t: 'Threes legs' },
+  { k: 'pairs', t: 'Pairs legs' }, { k: 'singles', t: 'Singles legs' }, { k: 'legs', t: 'Total' },
+];
+function renderLegs(recs) {
+  if (!recs.length) return '<div class="empty">No matches match these filters.</div>';
+  const weeks = [...new Set(recs.map(r => r.week))].sort((a, b) => a - b);
+  const ts = teamStats(weeks, D);
+  const iss = D.issues.filter(i => weeks.includes(i.week));
+  let h = '';
+  if (iss.length) h += '<div class="box warn"><b>Check the spreadsheet</b><ul>' + iss.map(i => '<li>Week ' + i.week + ': ' + esc(i.msg) + '</li>').join('') + '</ul></div>';
+  h += '<h3 class="sec">Team legs won</h3><div class="stats"><div><b>' + ts.threes + '</b><span>Threes</span></div><div><b>' + ts.pairs + '</b><span>Pairs</span></div><div><b>' + ts.singles + '</b><span>Singles</span></div><div><b>' + ts.total + '</b><span>All legs</span></div></div>';
+  const ag = aggregate(recs, D).sort((a, b) => {
+    const x = a[legSort.key], y = b[legSort.key], c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+    return (c * legSort.dir) || (b.legs - a.legs) || a.player.localeCompare(b.player);
+  });
+  const arrow = k => legSort.key === k ? (legSort.dir < 0 ? ' ▼' : ' ▲') : '';
+  h += '<h3 class="sec">Leg wins by player</h3><div class="tablewrap"><table class="data"><thead><tr>' + LCOLS.map(c =>
+    '<th class="' + (c.txt ? '' : 'n') + '" aria-sort="' + (legSort.key === c.k ? (legSort.dir < 0 ? 'descending' : 'ascending') : 'none') + '"><button type="button" data-lsort="' + c.k + '">' + esc(c.t) + arrow(c.k) + '</button></th>').join('') + '</tr></thead><tbody>' +
+    ag.map(a => '<tr><td>' + esc(a.player) + '</td><td class="n">' + a.apps + '</td><td class="n">' + a.threes + '</td><td class="n">' + a.pairs + '</td><td class="n">' + a.singles + '</td><td class="n">' + a.legs + '</td></tr>').join('') + '</tbody></table></div>' +
+    '<p class="legnote">In threes and pairs, every player in a winning team is credited with the leg, so player columns add up to more than the team totals above.</p>';
+  const grp = (title, list) => '<h3 class="sec">' + title + '</h3>' + (list.length
+    ? '<div class="tablewrap">' + tableHTML(['Team', 'Legs won', 'Times together'], list.map(g => [g.names.join(' & '), g.legs, g.times]), [1, 2]).replace('<table>', '<table class="data">') + '</div>'
+    : '<div class="empty">No team results yet.</div>');
+  h += grp('Pairs partnerships', ts.pairList) + grp('Threes teams', ts.threesList);
+  h += '<h3 class="sec">Match by match</h3>' + weeks.slice().reverse().map((w, i) => {
+    const t = D.weekTeams[w], fx = D.fixtureByWeek[w], l = legsForWeek(w, D);
+    const head = '<span class="w">Week ' + w + '</span><span>' + esc(fx.opp) + ' (' + esc(fx.venue.toLowerCase()) + ')</span>';
+    if (!t) return '<details class="wk"><summary>' + head + '<span class="who muted">Teams could not be worked out</span><span></span></summary></details>';
+    const rows = t.threes.map((x, j) => ['Threes team ' + (j + 1), x.players.join(' & '), x.legs]).concat(t.pairs.map((x, j) => ['Pairs team ' + (j + 1), x.players.join(' & '), x.legs]));
+    return '<details class="wk"' + (i === 0 ? ' open' : '') + '><summary>' + head + '<span class="who">Threes ' + l.threes + ', pairs ' + l.pairs + ', singles ' + l.singles + '</span><span class="pts">' + l.total + '</span></summary>' +
+      '<div class="tablewrap">' + tableHTML(['Team', 'Players', 'Legs won'], rows, [2]).replace('<table>', '<table class="data">') + '</div></details>';
+  }).join('');
+  return h;
+}
+
 function renderPlayer(recs) {
   const names = D.players;
   if (!names.length) return '<div class="empty">No player data yet.</div>';
@@ -585,13 +716,13 @@ function renderPlayer(recs) {
   const pr = recs.filter(r => r.player === selPlayer).sort((a, b) => a.week - b.week);
   const a = aggregate(pr, D)[0];
   let h = '<div class="playerpick"><label>Player<select id="pSel">' + names.map(n => '<option' + (n === selPlayer ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select></label>';
-  if (a) h += '<div class="stats"><div><b>' + a.apps + '</b><span>Played</span></div><div><b>' + a.tons + '</b><span>Tons</span></div><div><b>' + (a.best || '–') + '</b><span>Highest ton</span></div><div><b>' + a.n180 + '</b><span>180s</span></div><div><b>' + a.mvp + '</b><span>MVP wins</span></div><div><b>' + a.points + '</b><span>MVP points</span></div></div>';
+  if (a) h += '<div class="stats"><div><b>' + a.apps + '</b><span>Played</span></div><div><b>' + a.tons + '</b><span>Tons</span></div><div><b>' + (a.best || '–') + '</b><span>Highest ton</span></div><div><b>' + a.n180 + '</b><span>180s</span></div><div><b>' + a.threes + '</b><span>Threes legs</span></div><div><b>' + a.pairs + '</b><span>Pairs legs</span></div><div><b>' + a.singles + '</b><span>Singles legs</span></div><div><b>' + a.mvp + '</b><span>MVP wins</span></div><div><b>' + a.points + '</b><span>MVP points</span></div></div>';
   h += '</div>';
   if (!pr.length) return h + '<div class="empty">' + esc(selPlayer) + ' has no appearances with these filters.</div>';
-  h += '<div class="tablewrap"><table class="data"><thead><tr><th class="n">Week</th><th>Opposition</th><th>Venue</th><th class="n">Tons</th><th>Ton scores</th><th>Checkouts</th><th class="n">Points</th><th></th></tr></thead><tbody>';
+  h += '<div class="tablewrap"><table class="data"><thead><tr><th class="n">Week</th><th>Opposition</th><th>Venue</th><th class="n">Tons</th><th>Ton scores</th><th>Checkouts</th><th class="n">Threes</th><th class="n">Pairs</th><th class="n">Singles</th><th class="n">Points</th><th></th></tr></thead><tbody>';
   for (const r of pr) {
     const win = D.winners[r.week] && D.winners[r.week].names.includes(r.player);
-    h += '<tr><td class="n">' + r.week + '</td><td>' + esc(r.opp) + '</td><td>' + esc(r.venue) + '</td><td class="n">' + r.tons.length + '</td><td>' + esc(r.tons.join(', ') || '–') + '</td><td>' + esc(r.checkouts.join(', ') || '–') + '</td><td class="n">' + r.score + '</td><td>' + (win ? '<span class="pill">MVP</span>' : '') + '</td></tr>';
+    h += '<tr><td class="n">' + r.week + '</td><td>' + esc(r.opp) + '</td><td>' + esc(r.venue) + '</td><td class="n">' + r.tons.length + '</td><td>' + esc(r.tons.join(', ') || '–') + '</td><td>' + esc(r.checkouts.join(', ') || '–') + '</td><td class="n">' + r.threes + '</td><td class="n">' + r.pairs + '</td><td class="n">' + r.singles + '</td><td class="n">' + r.score + '</td><td>' + (win ? '<span class="pill">MVP</span>' : '') + '</td></tr>';
   }
   return h + '</tbody></table></div>';
 }
@@ -608,7 +739,7 @@ function renderFixtures() {
 
 function renderTab() {
   const recs = pick(D.records, F), p = $('panel');
-  p.innerHTML = tab === 'board' ? renderBoard(recs) : tab === 'mvp' ? renderMVP(recs) : tab === 'player' ? renderPlayer(recs) : renderFixtures();
+  p.innerHTML = tab === 'board' ? renderBoard(recs) : tab === 'mvp' ? renderMVP(recs) : tab === 'legs' ? renderLegs(recs) : tab === 'player' ? renderPlayer(recs) : renderFixtures();
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
 }
 
@@ -620,6 +751,8 @@ $('fReset').addEventListener('click', () => { renderFilters(); renderTab(); });
 $('panel').addEventListener('click', e => {
   const s = e.target.closest('button[data-sort]');
   if (s) { const k = s.dataset.sort; sort = sort.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: k === 'player' ? 1 : -1 }; renderTab(); return; }
+  const ls = e.target.closest('button[data-lsort]');
+  if (ls) { const k = ls.dataset.lsort; legSort = legSort.key === k ? { key: k, dir: -legSort.dir } : { key: k, dir: k === 'player' ? 1 : -1 }; renderTab(); return; }
   const p = e.target.closest('button[data-player]');
   if (p) { selPlayer = p.dataset.player; tab = 'player'; renderTab(); }
 });
