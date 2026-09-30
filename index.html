@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Darts stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ECF0EB; --paper:#FAFBF9; --ink:#15302A; --muted:#58695F;
+  --green:#1C5A49; --deep:#143F34; --red:#B6382C; --brass:#E0BE62; --brass-ink:#7A5A10;
+  --line:#CBD5CE; --chalk:#F1F4EC; --tint:#D3E4DB;
+  --display:'Barlow Condensed','Arial Narrow','Roboto Condensed',sans-serif;
+  --body:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body)}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 16px 56px}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+h1{margin:0;font:700 46px/1 var(--display);letter-spacing:.01em}
+.sub{margin:6px 0 0;color:var(--muted)}
+.load{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.load label{cursor:pointer;border:1.5px solid var(--green);color:var(--green);padding:7px 14px;border-radius:3px;font-weight:600;font-size:14px;background:transparent}
+.load label:hover{background:var(--green);color:#fff}
+.load input{position:absolute;opacity:0;width:1px;height:1px}
+.load input:focus-visible + label{outline:3px solid var(--red);outline-offset:2px}
+#status{font-size:13px;color:var(--muted);min-height:1.2em;max-width:320px;text-align:right}
+#status.err{color:var(--red)}
+
+/* ask panel */
+.ask{background:var(--deep);color:var(--chalk);border-radius:4px;padding:22px 22px 20px}
+.ask h2{margin:0 0 10px;font:600 22px/1.2 var(--display);letter-spacing:.02em}
+.askrow{display:flex;gap:8px}
+.askrow input{flex:1;min-width:0;font-size:19px;padding:12px 14px;border:2px solid transparent;border-radius:3px;background:#fff;color:var(--ink)}
+.askrow input:focus-visible{outline:3px solid var(--brass);outline-offset:1px}
+.askrow button{background:var(--red);color:#fff;border:0;border-radius:3px;padding:0 22px;font-weight:600;font-size:17px;cursor:pointer}
+.askrow button:hover{background:#9E2F24}
+.examples{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}
+.examples button{background:transparent;border:1px solid #5E8578;color:var(--chalk);border-radius:99px;padding:5px 12px;font-size:14px;cursor:pointer}
+.examples button:hover{background:#21574A;border-color:var(--brass)}
+.hint{margin:12px 0 0;font-size:13px;color:#A9C0B6}
+
+#answer{margin-top:18px;border-top:1px solid #2F6152;padding-top:16px}
+#answer:empty{display:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{font-size:13px;padding:2px 10px;border-radius:99px;background:#21574A;color:#D6E6DE}
+.big{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px}
+.big .num{font:700 96px/1 var(--display);letter-spacing:.01em;color:#fff}
+.big .num.long{font-size:56px}
+.big .unit{font:600 26px/1 var(--display);color:var(--brass)}
+.headline{margin:8px 0 0;font-size:18px;max-width:70ch}
+.note{margin:8px 0 0;font-size:14px;color:#A9C0B6}
+.anstable{margin-top:14px;max-height:340px;overflow:auto}
+.anstable table{width:100%;border-collapse:collapse;font-size:15px}
+.anstable th{font-weight:600;color:var(--brass);text-align:left;padding:6px 10px;border-bottom:1px solid #2F6152;position:sticky;top:0;background:var(--deep)}
+.anstable td{padding:6px 10px;border-bottom:1px solid #22493D}
+.anstable .n{text-align:right;font-variant-numeric:tabular-nums}
+.anstable th.n{text-align:right}
+
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;margin:26px 0 6px;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:4px}
+.filters label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:2px}
+.filters select{padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:#fff;color:var(--ink);min-width:110px}
+.filters button{border:0;background:none;color:var(--green);font-weight:600;cursor:pointer;padding:6px 4px;text-decoration:underline}
+.filternote{margin:0 0 14px;font-size:13px;color:var(--muted)}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.tabs button{background:none;border:0;padding:10px 14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--red)}
+.tabs button:hover{color:var(--ink)}
+
+.tablewrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:4px}
+table.data{width:100%;border-collapse:collapse;font-size:15px}
+table.data th,table.data td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+table.data tr:last-child td{border-bottom:0}
+table.data th{font-weight:600;color:var(--muted);font-size:14px;background:#F2F5F1}
+table.data th button{background:none;border:0;padding:0;font-weight:600;color:inherit;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+table.data th button:hover{color:var(--ink)}
+table.data .n{text-align:right;font-variant-numeric:tabular-nums}
+table.data td.bar{background:linear-gradient(90deg,var(--tint) var(--p,0%),transparent var(--p,0%));font-weight:600}
+.pill{display:inline-block;font-size:12px;font-weight:600;background:var(--brass);color:#3B2B04;padding:1px 8px;border-radius:99px;margin-left:6px}
+.muted{color:var(--muted)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+details.wk{background:var(--paper);border:1px solid var(--line);border-radius:4px;margin-bottom:8px}
+details.wk summary{display:grid;grid-template-columns:70px 1fr auto auto;gap:4px 14px;align-items:baseline;padding:11px 14px;cursor:pointer;list-style:none}
+details.wk summary::-webkit-details-marker{display:none}
+details.wk summary .w{font:600 22px/1 var(--display)}
+details.wk summary .who{font-weight:600}
+details.wk summary .pts{font:600 22px/1 var(--display);color:var(--green)}
+details.wk[open] summary{border-bottom:1px solid var(--line)}
+details.wk .tablewrap{border:0;border-radius:0}
+
+.playerpick{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;margin-bottom:14px}
+.playerpick label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:2px}
+.playerpick select{padding:7px 10px;border:1px solid var(--line);border-radius:3px;background:#fff;min-width:170px;font-size:16px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 26px}
+.stats div{display:flex;flex-direction:column}
+.stats b{font:700 34px/1 var(--display)}
+.stats span{font-size:13px;color:var(--muted)}
+
+@media (max-width:640px){
+  h1{font-size:38px}
+  .big .num{font-size:68px} .big .num.long{font-size:44px}
+  .ask{padding:16px 14px}
+  .askrow button{padding:0 16px}
+  .load{align-items:flex-start} #status{text-align:left}
+  details.wk summary{grid-template-columns:54px 1fr auto}
+  details.wk summary .who{grid-column:2}
+}
+@media (prefers-reduced-motion:no-preference){ .askrow button,.examples button,.load label{transition:background .15s} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <h1>Darts stats</h1>
+    <p class="sub" id="sub"></p>
+  </div>
+  <div class="load">
+    <input type="file" id="file" accept=".xlsx,.xlsm">
+    <label for="file">Load updated spreadsheet</label>
+    <div id="status" role="status" aria-live="polite"></div>
+  </div>
+</header>
+
+<section class="ask" aria-labelledby="askh">
+  <h2 id="askh">Ask a question</h2>
+  <form class="askrow" id="askform" autocomplete="off">
+    <input id="q" type="text" aria-label="Your question" placeholder="e.g. How many tons has Rod F scored this season?">
+    <button type="submit">Ask</button>
+  </form>
+  <ul class="examples" id="examples"></ul>
+  <p class="hint">Answers come straight from the spreadsheet: tons, 180s, 100+ checkouts, MVP, appearances and fixtures. Name a player, week, team or home/away to narrow it down.</p>
+  <div id="answer" aria-live="polite"></div>
+</section>
+
+<section class="filters" aria-label="Filters for the tables below">
+  <label>From week <select id="fFrom"></select></label>
+  <label>To week <select id="fTo"></select></label>
+  <label>Venue <select id="fVenue"><option value="">Home and away</option><option>Home</option><option>Away</option></select></label>
+  <label>Opposition <select id="fOpp"></select></label>
+  <button type="button" id="fReset">Reset filters</button>
+</section>
+<p class="filternote">These filters change the tables below. The question box always looks at the whole season unless your question names a week, team or venue.</p>
+
+<div class="tabs" role="tablist" id="tabs">
+  <button role="tab" data-tab="board" aria-selected="true">Leaderboard</button>
+  <button role="tab" data-tab="mvp" aria-selected="false">MVP by week</button>
+  <button role="tab" data-tab="player" aria-selected="false">Player</button>
+  <button role="tab" data-tab="fixtures" aria-selected="false">Fixtures</button>
+</div>
+<div id="panel" role="tabpanel"></div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ============ DATA ============ */
+// Raw rows from the "Master" sheet (columns A to AC). Replace by loading an updated spreadsheet.
+const RAW = [["Week","Opposition","Venue","Player","Threes","Pairs","Singles","Threes weighted","Pairs weighted","Singles weighted","2-0 Bonus point","Checkout 1","Checkout  2","Checkout 3","Checkout 4","Ton 1","Ton 2","Ton 3","Ton 4","Ton 5","Ton 6","Ton 7","Ton 8","Ton 9","Ton 10","N Tons","Ton Bonus","180 bonus","100 + Checkout bonus "],[1,"Red Lion","Away","Chris A",0,1,0,0,0.5,0,0,0,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,0,0],[1,"Red Lion","Away","Dave H",0,1,2,0,0.5,2,1,0,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,0,0],[1,"Red Lion","Away","Rod F",0,0,1,0,0,1,0,0,null,null,null,100,100,null,null,null,null,null,null,null,null,2,0.2,0,0],[1,"Red Lion","Away","Ian B",0,0,1,0,0,1,0,0,null,null,null,140,100,140,121,null,null,null,null,null,null,4,0.4,0,0],[1,"Red Lion","Away","Dave K",0,1,2,0,0.5,2,0,0,null,null,null,100,100,null,null,null,null,null,null,null,null,2,0.2,0,0],[1,"Red Lion","Away","Matthew H",0,1,0,0,0.5,0,0,0,null,null,null,100,null,null,null,null,null,null,null,null,null,1,0.1,0,0],[2,"Snooker A","Home","Colin M",0,0,0,0,0,0,0,0,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,0,0],[2,"Snooker A","Home","Dave H",0,0,0,0,0,0,0,0,null,null,null,114,null,null,null,null,null,null,null,null,null,1,0.1,0,0],[2,"Snooker A","Home","Matthew H",0,0,0,0,0,0,0,0,null,null,null,100,100,121,null,null,null,null,null,null,null,3,0.30000000000000004,0,0],[2,"Snooker A","Home","Rod F",1,0,2,0.33,0,2,1,0,null,null,null,100,100,100,100,null,null,null,null,null,null,4,0.4,0,0],[2,"Snooker A","Home","Ian B",1,1,2,0.33,0.5,2,1,0,null,null,null,100,140,100,100,125,100,null,null,null,null,6,0.6000000000000001,0,0],[2,"Snooker A","Home","Dan C",1,1,1,0.33,0.5,1,0,72,null,null,null,125,139,140,102,null,null,null,null,null,null,4,0.4,0,0],[3,"Hunting Lodge","Away","Colin M",0,0,0,0,0,0,0,0,null,null,null,114,null,null,null,null,null,null,null,null,null,1,0.1,0,0],[3,"Hunting Lodge","Away","Dave K",0,0,1,0,0,1,0,0,null,null,null,100,100,121,null,null,null,null,null,null,null,3,0.30000000000000004,0,0],[3,"Hunting Lodge","Away","Rod F",0,0,2,0,0,2,1,0,null,null,null,100,100,140,null,null,null,null,null,null,null,3,0.30000000000000004,0,0],[3,"Hunting Lodge","Away","Matthew H",1,0,1,0.33,0,1,0,0,null,null,null,140,100,null,null,null,null,null,null,null,null,2,0.2,0,0],[3,"Hunting Lodge","Away","Ian B",1,0,2,0.33,0,2,0,0,null,null,null,100,100,100,140,null,null,null,null,null,null,4,0.4,0,0],[3,"Hunting Lodge","Away","Mark B",1,0,1,0.33,0,1,0,0,null,null,null,100,121,120,null,null,null,null,null,null,null,3,0.30000000000000004,0,0],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[4,"Fat Ox","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[5,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[6,"Seahorse B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[7,"Border Terrier","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[8,"New York","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[9,"Snooker B","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[10,"Seahorse A","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[11,"Preston Grange","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[12,"Phoenix Tap","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[13,"Seahorse C","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[14,"Red Lion","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[15,"Snooker A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[16,"Hunting Lodge","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[17,"Fat Ox","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[18,"NO GAME",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[19,"Seahorse B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[20,"Border Terrier","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[21,"New York","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[22,"Snooker B","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[23,"Seahorse A","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[24,"Preston Grange","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[25,"Phoenix Tap","Away",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null],[26,"Seahorse C","Home",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,0,null,null]];
+const SEASON_DEFAULT = "2026/27";
+
+/* ============ helpers ============ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+const r2 = x => Math.round((x + Number.EPSILON) * 100) / 100;
+const num = v => { if (typeof v === 'number') return v; if (v == null || v === '') return 0; const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+const plural = (n, a, b) => n === 1 ? a : b;
+
+/* ============ build model from raw rows ============ */
+function build(raw) {
+  const head = raw[0].map(norm);
+  const ix = n => head.indexOf(norm(n));
+  for (const n of ['Week', 'Opposition', 'Venue', 'Player'])
+    if (ix(n) < 0) throw new Error('Could not find a "' + n + '" column. Is this the Master sheet?');
+  const cWeek = ix('Week'), cOpp = ix('Opposition'), cVen = ix('Venue'), cPl = ix('Player');
+  const cScore = ['Threes weighted', 'Pairs weighted', 'Singles weighted', '2-0 Bonus point'].map(ix);
+  const c180 = ix('180 bonus'), cTonCo = ix('100 + Checkout bonus');
+  const tonCols = [], coCols = [];
+  head.forEach((h, i) => { if (/^ton \d+$/.test(h)) tonCols.push(i); if (/^checkout \d+$/.test(h)) coCols.push(i); });
+  const val = (row, i) => i < 0 ? 0 : num(row[i]);
+
+  const fixtures = [], seen = new Set(), records = [];
+  for (const row of raw.slice(1)) {
+    const week = Number(row[cWeek]);
+    if (!Number.isFinite(week) || week <= 0) continue;
+    const opp = String(row[cOpp] ?? '').trim(), venue = String(row[cVen] ?? '').trim();
+    if (!seen.has(week)) { seen.add(week); fixtures.push({ week, opp, venue, bye: !opp || norm(opp) === 'no game' }); }
+    const player = String(row[cPl] ?? '').trim();
+    if (!player) continue;
+    const tons = tonCols.map(i => row[i]).filter(v => num(v) > 0).map(num);
+    const checkouts = coCols.map(i => num(row[i])).filter(v => v > 0);
+    const n180 = Math.round(val(row, c180) / 0.5), tonco = Math.round(val(row, cTonCo) / 0.5);
+    const score = r2(cScore.reduce((s, i) => s + val(row, i), 0) + tons.length * 0.1 + val(row, c180) + val(row, cTonCo));
+    records.push({ week, opp, venue, player, tons, checkouts, n180, tonco, score });
+  }
+  fixtures.sort((a, b) => a.week - b.week);
+  const fixtureByWeek = Object.fromEntries(fixtures.map(f => [f.week, f]));
+  const playedWeeks = [...new Set(records.map(r => r.week))].sort((a, b) => a - b);
+  const winners = {};
+  for (const w of playedWeeks) {
+    const ranking = records.filter(r => r.week === w).sort((a, b) => b.score - a.score || b.tons.length - a.tons.length);
+    const top = ranking[0].score;
+    if (top > 0) winners[w] = { names: ranking.filter(r => r.score === top).map(r => r.player), score: top, ranking };
+  }
+  const players = [...new Set(records.map(r => r.player))].sort();
+  const opponents = [...new Set(fixtures.filter(f => !f.bye && playedWeeks.includes(f.week)).map(f => f.opp))].sort();
+  return { fixtures, fixtureByWeek, records, playedWeeks, winners, players, opponents,
+           latestWeek: playedWeeks.length ? playedWeeks[playedWeeks.length - 1] : 0,
+           totalMatches: fixtures.filter(f => !f.bye).length };
+}
+
+function pick(recs, f) {
+  return recs.filter(r =>
+    (f.from == null || r.week >= f.from) && (f.to == null || r.week <= f.to) &&
+    (!f.venue || r.venue === f.venue) && (!f.opp || r.opp === f.opp));
+}
+
+function aggregate(recs, D) {
+  const m = new Map();
+  for (const r of recs) {
+    let a = m.get(r.player);
+    if (!a) { a = { player: r.player, apps: 0, tons: 0, scores: [], best: 0, n180: 0, tonco: 0, points: 0, mvp: 0, mvpWeeks: [] }; m.set(r.player, a); }
+    a.apps++; a.tons += r.tons.length; a.scores.push(...r.tons);
+    a.best = Math.max(a.best, ...r.tons); a.n180 += r.n180; a.tonco += r.tonco; a.points += r.score;
+    const w = D.winners[r.week];
+    if (w && w.names.includes(r.player)) { a.mvp++; a.mvpWeeks.push(r.week); }
+  }
+  for (const a of m.values()) { a.points = r2(a.points); a.perMatch = a.apps ? r2(a.tons / a.apps) : 0; }
+  return [...m.values()];
+}
+
+/* ============ natural-language questions ============ */
+const METRICS = {
+  ton:    { label: 'tons',          get: a => a.tons },
+  n180:   { label: '180s',          get: a => a.n180 },
+  tonco:  { label: '100+ checkouts', get: a => a.tonco },
+  points: { label: 'MVP points',    get: a => a.points },
+  apps:   { label: 'appearances',   get: a => a.apps },
+};
+const ONE = { ton: 'ton', n180: '180', tonco: '100+ checkout', points: 'MVP point', apps: 'appearance' };
+const lead = names => names.length <= 2 ? names.join(' & ') : names.length + '-way tie';
+const esc_re = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function ask(q, D) {
+  const text = ' ' + q.toLowerCase().replace(/[’']s\b/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  const has = re => re.test(text);
+  const chips = [];
+  const out = o => Object.assign({ chips }, o, (ambiguous && !o.note) ? { note: '"' + ambiguous.charAt(0).toUpperCase() + ambiguous.slice(1) + '" matches more than one player, so all of them are shown. Add an initial to narrow it down.' } : {});
+
+  /* --- players --- */
+  let players = D.players.filter(n => new RegExp('\\b' + esc_re(norm(n)) + '\\b').test(text));
+  let ambiguous = null;
+  if (!players.length) {
+    players = D.players.filter(n => new RegExp('\\b' + esc_re(norm(n).split(' ')[0]) + '\\b').test(text));
+    if (players.length > 1) ambiguous = norm(players[0]).split(' ')[0];
+  }
+  players.forEach(p => chips.push(p));
+
+  /* --- weeks --- */
+  let from = null, to = null, m;
+  if ((m = text.match(/\bweeks? (\d+)(?: (?:to|and|through|until) (\d+))?/))) { from = +m[1]; to = m[2] ? +m[2] : from; }
+  else if ((m = text.match(/\bw(\d+)\b/))) { from = to = +m[1]; }
+  else if (has(/\b(last|latest|most recent|previous) (week|match|game|fixture)\b|\bthis week\b|\blast night\b/)) { from = to = D.latestWeek; }
+  else if (has(/\b(first|opening) (week|match|game)\b/) && D.playedWeeks.length) { from = to = D.playedWeeks[0]; }
+  if (from != null && to < from) [from, to] = [to, from];
+  if (from != null) chips.push(from === to ? 'Week ' + from : 'Weeks ' + from + ' to ' + to);
+
+  /* --- opposition / venue --- */
+  let opp = null;
+  const oppNames = [...new Set(D.fixtures.filter(f => !f.bye).map(f => f.opp))].sort((a, b) => b.length - a.length);
+  for (const o of oppNames) if (text.includes(' ' + norm(o) + ' ')) { opp = o; break; }
+  if (opp) chips.push('v ' + opp);
+  let venue = null;
+  if (has(/\bhome\b/) && !has(/\baway\b/)) venue = 'Home'; else if (has(/\baway\b/) && !has(/\bhome\b/)) venue = 'Away';
+  if (venue) chips.push(venue);
+  const f = { from, to, venue, opp };
+
+  const scope = () => {
+    const p = [];
+    if (f.from != null) p.push(f.from === f.to ? 'in week ' + f.from : 'in weeks ' + f.from + ' to ' + f.to);
+    if (f.opp) p.push('against ' + f.opp);
+    if (f.venue) p.push(f.venue === 'Home' ? 'at home' : 'away');
+    const n = D.playedWeeks.length;
+    return p.length ? p.join(' ') : 'this season (' + n + ' ' + plural(n, 'match', 'matches') + ' so far)';
+  };
+  const matchesIn = recs => new Set(recs.map(r => r.week)).size;
+
+  /* --- metric flags --- */
+  const isMVP = has(/\bmvp\b|\bmvps\b|most valuable|man of the match|player of the (match|week|night)|\bmotm\b/);
+  const is180 = has(/\b180s?\b|one eightys?|one eighties|maximums?/);
+  const isCheckout = has(/check ?outs?/);
+  const isTon = has(/\btons?\b|\b100s\b|hundreds?|centur/);
+  const isPoints = has(/\bpoints?\b/);
+  const isWho = has(/\bwho\b|\bwhich player\b|\bmost\b|\btop\b|\bleader\b|\bleading\b|\bbest\b|\bhighest\b/);
+  const isHigh = has(/\b(highest|biggest|best) (single )?(ton|tons|score|visit|three dart)/);
+  let mk = null;
+  if (is180) mk = 'n180'; else if (isCheckout) mk = 'tonco'; else if (isTon) mk = 'ton'; else if (isPoints) mk = 'points';
+  if (isMVP) chips.push('MVP'); else if (mk) chips.push(METRICS[mk].label.charAt(0).toUpperCase() + METRICS[mk].label.slice(1));
+  let note = null;
+  if (!mk && !isMVP && has(/\b(top scorer|highest scorer|scorer|scored the most)\b/)) { mk = 'ton'; note = 'Counting tons. Ask about "MVP points" to rank by points instead.'; }
+
+  /* --- next fixture --- */
+  if (!players.length && has(/\bnext\b|\bupcoming\b|\bwho do we play\b|\bwho are we playing\b|\bwho we play\b/) &&
+      has(/\b(play|playing|match|game|fixture|opponent|opposition|against|up against)\b/) && !mk && !isMVP) {
+    const up = D.fixtures.filter(x => !x.bye && x.week > D.latestWeek);
+    if (!up.length) return out({ big: '–', headline: 'There are no more fixtures in the list.' });
+    const n = up[0];
+    return out({ big: n.opp, unit: n.venue.toLowerCase(), headline: 'Week ' + n.week + ' is ' + n.opp + ' (' + n.venue.toLowerCase() + ').',
+      cols: ['Week', 'Opposition', 'Venue'], rows: up.slice(0, 4).map(x => [x.week, x.opp, x.venue]) });
+  }
+
+  /* --- empty-scope guard --- */
+  const scoped = pick(D.records, f);
+  if (!scoped.length) {
+    if (from != null && from === to) {
+      const fx = D.fixtureByWeek[from];
+      if (!fx) return out({ big: '–', headline: 'There is no week ' + from + ' in the fixture list.' });
+      if (fx.bye) return out({ big: '–', headline: 'Week ' + from + ' is a no-game week.' });
+      return out({ big: '–', headline: 'No results have been entered for week ' + from + ' (' + fx.opp + ', ' + fx.venue.toLowerCase() + ') yet.' });
+    }
+    if (mk || isMVP || opp || venue || from != null) return out({ big: '–', headline: 'No matches have been played ' + scope() + ' yet.' });
+  }
+
+  /* --- MVP --- */
+  if (isMVP) {
+    const board = has(/\b(most|leaderboard|table|standings|ranking|rankings|overall|so far|total|season)\b/);
+    if (players.length && isPoints) return metricAnswer('points');
+    if (players.length) {
+      const ag = aggregate(scoped, D);
+      const rows = players.map(p => { const a = ag.find(x => x.player === p); return [p, a ? a.mvp : 0, a && a.mvpWeeks.length ? a.mvpWeeks.join(', ') : '–']; });
+      if (players.length === 1 && from != null && from === to) {
+        const yes = rows[0][1] > 0;
+        return out({ big: yes ? 'Yes' : 'No', headline: players[0] + (yes ? ' was' : ' was not') + ' MVP in week ' + from + '.',
+          cols: ['Week ' + from + ' ranking', 'Points'], rows: (D.winners[from]?.ranking || []).map(r => [r.player, r.score]), num: [1] });
+      }
+      if (players.length === 1)
+        return out({ big: rows[0][1], unit: plural(rows[0][1], 'MVP award', 'MVP awards'),
+          headline: players[0] + ' has been MVP ' + rows[0][1] + ' ' + plural(rows[0][1], 'time', 'times') + ' ' + scope() + '.',
+          cols: ['Player', 'Times MVP', 'Weeks'], rows, num: [1] });
+      return out({ headline: 'MVP awards ' + scope() + '.', cols: ['Player', 'Times MVP', 'Weeks'], rows, num: [1] });
+    }
+    if (from != null) {
+      const ws = D.playedWeeks.filter(w => w >= from && w <= to && D.winners[w] && scoped.some(r => r.week === w));
+      if (ws.length === 1) {
+        const w = D.winners[ws[0]], fx = D.fixtureByWeek[ws[0]];
+        const tie = w.names.length > 1;
+        return out({ big: w.names.join(' & '), unit: 'MVP',
+          headline: (tie ? w.names.join(' and ') + ' tied for MVP' : w.names[0] + ' was MVP') + ' in week ' + ws[0] + ' against ' + fx.opp + ' (' + fx.venue.toLowerCase() + ') with ' + w.score + ' points.',
+          cols: ['Player', 'Tons', 'Points'], rows: w.ranking.map(r => [r.player, r.tons.length, r.score]), num: [1, 2] });
+      }
+      return out({ headline: 'MVP by week ' + scope() + '.', cols: ['Week', 'Opposition', 'MVP', 'Points'],
+        rows: ws.map(w => [w, D.fixtureByWeek[w].opp, D.winners[w].names.join(' & '), D.winners[w].score]), num: [3] });
+    }
+    if (board || !D.latestWeek) {
+      const ag = aggregate(scoped, D).sort((a, b) => b.mvp - a.mvp || b.points - a.points);
+      const top = ag[0];
+      return out({ big: top && top.mvp ? lead(ag.filter(a => a.mvp === top.mvp).map(a => a.player)) : '–', unit: top && top.mvp ? top.mvp + ' ' + plural(top.mvp, 'award', 'awards') + (ag.filter(a => a.mvp === top.mvp).length > 2 ? ' each' : '') : '',
+        headline: 'MVP awards ' + scope() + '.', cols: ['Player', 'Times MVP', 'MVP points'], rows: ag.filter(a => a.mvp || a.points).map(a => [a.player, a.mvp, a.points]), num: [1, 2] });
+    }
+    // "who was MVP?" with no week: latest match
+    const w = D.winners[D.latestWeek], fx = D.fixtureByWeek[D.latestWeek];
+    chips.push('Latest week (' + D.latestWeek + ')');
+    return out({ big: w.names.join(' & '), unit: 'MVP', headline: 'In the most recent match (week ' + D.latestWeek + ', ' + fx.opp + ') the MVP was ' + w.names.join(' and ') + ' with ' + w.score + ' points.',
+      cols: ['Player', 'Tons', 'Points'], rows: w.ranking.map(r => [r.player, r.tons.length, r.score]), num: [1, 2] });
+  }
+
+  /* --- highest single ton --- */
+  if (isHigh) {
+    let list = scoped.flatMap(r => r.tons.map(v => ({ v, r })));
+    if (players.length) list = list.filter(x => players.includes(x.r.player));
+    list.sort((a, b) => b.v - a.v);
+    if (!list.length) return out({ big: '–', headline: 'No tons recorded ' + scope() + '.' });
+    const t = list[0];
+    return out({ big: t.v, unit: 'highest ton', headline: t.r.player + ' hit ' + t.v + ' in week ' + t.r.week + ' against ' + t.r.opp + ', the highest ton ' + (players.length ? 'by ' + players.join(' or ') + ' ' : '') + scope() + '.',
+      cols: ['Score', 'Player', 'Week', 'Opposition'], rows: list.slice(0, 5).map(x => [x.v, x.r.player, x.r.week, x.r.opp]), num: [0] });
+  }
+
+  /* --- did X play --- */
+  if (players.length === 1 && from != null && from === to && has(/\bdid\b.*\bplay|\bplay(ed)? in\b/)) {
+    const pr = scoped.filter(r => r.player === players[0]);
+    return out({ big: pr.length ? 'Yes' : 'No', headline: players[0] + (pr.length ? ' played' : ' did not play') + ' in week ' + from + '.' });
+  }
+
+  /* --- counts: tons, 180s, checkouts, points, appearances --- */
+  const asksApps = !mk && !has(/\bwho (played|was in|turned out)\b|\bline ?up\b/) && has(/\b(appearances?|apps|played|games|matches)\b/) && has(/how many|most|who|number|times/);
+  if (asksApps) mk = 'apps';
+  if (mk) return metricAnswer(mk);
+
+  /* --- match summary / player's record --- */
+  if (from != null || opp || players.length) {
+    let recs = scoped;
+    if (players.length) recs = recs.filter(r => players.includes(r.player));
+    if (!recs.length) return out({ big: '–', headline: 'No appearances found ' + (players.length ? 'for ' + players.join(' and ') + ' ' : '') + scope() + '.' });
+    if (players.length && from == null && !opp && !venue) {
+      return out(playerSummary(players, scoped));
+    }
+    recs = recs.slice().sort((a, b) => a.week - b.week || b.score - a.score);
+    const tonsTotal = recs.reduce((s, r) => s + r.tons.length, 0), nm = matchesIn(recs);
+    let headline;
+    if (!players.length && nm === 1) {
+      const w = D.winners[recs[0].week], fx = D.fixtureByWeek[recs[0].week];
+      headline = 'Week ' + fx.week + ' against ' + fx.opp + ' (' + fx.venue.toLowerCase() + '): ' + recs.length + ' players, ' + tonsTotal + ' ' + plural(tonsTotal, 'ton', 'tons') + (w ? '. MVP: ' + w.names.join(' and ') : '') + '.';
+    } else headline = recs.length + ' ' + plural(recs.length, 'appearance', 'appearances') + ' ' + scope() + ', ' + tonsTotal + ' ' + plural(tonsTotal, 'ton', 'tons') + '.';
+    return out({ big: !players.length && nm === 1 ? recs.length : tonsTotal, unit: !players.length && nm === 1 ? 'players' : plural(tonsTotal, 'ton', 'tons'), headline,
+      cols: ['Week', 'Player', 'Tons', 'Ton scores', 'Points'], rows: recs.map(r => [r.week, r.player, r.tons.length, r.tons.join(', ') || '–', r.score]), num: [0, 2, 4] });
+  }
+
+  return out({ fallback: true, headline: "I couldn't match that to a question I know how to answer." });
+
+  /* ---- helpers that close over parsed state ---- */
+  function metricAnswer(key) {
+    const M = METRICS[key];
+    const ag = aggregate(scoped, D);
+    const valueOf = a => M.get(a);
+    if (players.length === 1) {
+      const p = players[0];
+      const pr = scoped.filter(r => r.player === p);
+      if (!pr.length) return out({ big: '–', headline: p + ' has no recorded appearances ' + scope() + '.' });
+      const a = ag.find(x => x.player === p), total = valueOf(a);
+      const rows = pr.slice().sort((x, y) => x.week - y.week).map(r => {
+        const v = key === 'ton' ? r.tons.length : key === 'n180' ? r.n180 : key === 'tonco' ? r.tonco : key === 'points' ? r.score : 1;
+        return [r.week, r.opp + ' (' + r.venue.toLowerCase() + ')', v].concat(key === 'ton' ? [r.tons.join(', ') || '–'] : []);
+      });
+      const unitOne = ONE[key];
+      return out({ big: key === 'points' ? r2(total) : total, unit: total === 1 ? unitOne : M.label,
+        headline: p + ' has ' + total + ' ' + (total === 1 ? unitOne : M.label) + ' ' + scope() + '.',
+        note: note || 'Played in ' + pr.length + ' of ' + matchesIn(scoped) + ' ' + plural(matchesIn(scoped), 'match', 'matches') + ' in this selection.',
+        cols: ['Week', 'Match', M.label.charAt(0).toUpperCase() + M.label.slice(1)].concat(key === 'ton' ? ['Ton scores'] : []), rows, num: [0, 2] });
+    }
+    if (players.length > 1) {
+      const rows = players.map(p => { const a = ag.find(x => x.player === p); return [p, a ? a.apps : 0, a ? valueOf(a) : 0]; });
+      return out({ headline: M.label.charAt(0).toUpperCase() + M.label.slice(1) + ' ' + scope() + '.', note,
+        cols: ['Player', 'Played', M.label], rows, num: [1, 2] });
+    }
+    const ranked = ag.filter(a => valueOf(a) > 0).sort((a, b) => valueOf(b) - valueOf(a) || a.player.localeCompare(b.player));
+    const total = r2(ag.reduce((s, a) => s + valueOf(a), 0));
+    if (!ranked.length) return out({ big: 0, unit: M.label, headline: 'No ' + M.label + ' recorded ' + scope() + '.' });
+    if (isWho && key !== 'apps' || (isWho && key === 'apps')) {
+      const top = valueOf(ranked[0]), leaders = ranked.filter(a => valueOf(a) === top).map(a => a.player);
+      return out({ big: lead(leaders), unit: top + ' ' + (top === 1 ? ONE[key] : M.label) + (leaders.length > 2 ? ' each' : ''),
+        headline: (leaders.length > 1 ? 'Joint top: ' : '') + leaders.join(' and ') + (leaders.length > 1 ? ' with ' : ' leads with ') + top + ' ' + M.label + ' ' + scope() + '.', note,
+        cols: ['Player', 'Played', M.label], rows: ranked.slice(0, 8).map(a => [a.player, a.apps, valueOf(a)]), num: [1, 2] });
+    }
+    return out({ big: total, unit: M.label, headline: 'The team has ' + total + ' ' + M.label + ' ' + scope() + '.', note,
+      cols: ['Player', 'Played', M.label], rows: ranked.map(a => [a.player, a.apps, valueOf(a)]), num: [1, 2] });
+  }
+
+  function playerSummary(ps, recs) {
+    const ag = aggregate(recs, D);
+    const rows = ps.map(p => { const a = ag.find(x => x.player === p); return a ? [p, a.apps, a.tons, a.best || '–', a.n180, a.tonco, a.mvp, a.points] : [p, 0, 0, '–', 0, 0, 0, 0]; });
+    const one = ps.length === 1 ? rows[0] : null;
+    return { big: one ? one[2] : null, unit: one ? plural(one[2], 'ton', 'tons') : '',
+      headline: one ? ps[0] + ' ' + scope() + ': played ' + one[1] + ', MVP ' + one[6] + ' ' + plural(one[6], 'time', 'times') + ', ' + one[7] + ' MVP points.' : 'Player summary ' + scope() + '.',
+      cols: ['Player', 'Played', 'Tons', 'Highest ton', '180s', '100+ checkouts', 'MVP wins', 'MVP points'], rows, num: [1, 2, 3, 4, 5, 6, 7] };
+  }
+}
+
+/* ============ state ============ */
+let D = build(RAW);
+let season = SEASON_DEFAULT;
+const F = { from: null, to: null, venue: '', opp: '' };
+let tab = 'board';
+let sort = { key: 'tons', dir: -1 };
+let selPlayer = null;
+
+/* ============ rendering ============ */
+function tableHTML(cols, rows, numIdx = []) {
+  const n = new Set(numIdx);
+  return '<table><thead><tr>' + cols.map((c, i) => '<th' + (n.has(i) ? ' class="n"' : '') + '>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + r.map((c, i) => '<td' + (n.has(i) ? ' class="n"' : '') + '>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+}
+
+function renderAnswer(a) {
+  const box = $('answer');
+  let h = '<div class="chips">' + (a.chips || []).map(c => '<span class="chip">' + esc(c) + '</span>').join('') + '</div>';
+  if (a.fallback) {
+    h += '<p class="headline">' + esc(a.headline) + '</p><p class="note">Try asking about tons, 180s, MVP, appearances or fixtures, for example:</p>';
+    box.innerHTML = h; box.appendChild(exampleList(EXAMPLES.slice(0, 4))); return;
+  }
+  if (a.big != null && a.big !== '') {
+    const b = String(a.big);
+    h += '<div class="big"><span class="num' + (b.length > 6 ? ' long' : '') + '">' + esc(b) + '</span>' + (a.unit ? '<span class="unit">' + esc(a.unit) + '</span>' : '') + '</div>';
+  }
+  h += '<p class="headline">' + esc(a.headline) + '</p>';
+  if (a.note) h += '<p class="note">' + esc(a.note) + '</p>';
+  if (a.cols && a.rows && a.rows.length) h += '<div class="anstable">' + tableHTML(a.cols, a.rows, a.num || []) + '</div>';
+  box.innerHTML = h;
+}
+
+const EXAMPLES = [
+  'How many tons has Rod F scored this season?',
+  'Who was MVP in week 2?',
+  'Who has hit the most tons?',
+  'How many times has Ian B been MVP?',
+  'Who played in week 3?',
+  'Who do we play next?',
+];
+function exampleList(list) {
+  const ul = document.createElement('ul'); ul.className = 'examples';
+  list.forEach(t => { const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button'; b.textContent = t;
+    b.addEventListener('click', () => { $('q').value = t; run(t); $('q').focus(); }); li.appendChild(b); ul.appendChild(li); });
+  return ul;
+}
+function run(q) { if (!q.trim()) return; renderAnswer(ask(q, D)); }
+
+function renderHead() {
+  const played = D.playedWeeks.length;
+  $('sub').textContent = 'Season ' + season + ', ' + played + ' of ' + D.totalMatches + ' matches played' + (D.latestWeek ? ', latest week ' + D.latestWeek : '');
+}
+
+function renderFilters() {
+  const opts = (sel, items, blank) => { sel.innerHTML = (blank ? '<option value="">' + blank + '</option>' : '') + items.map(i => '<option value="' + esc(i) + '">' + esc(i) + '</option>').join(''); };
+  const weeks = D.playedWeeks.length ? D.playedWeeks : [1];
+  opts($('fFrom'), weeks); opts($('fTo'), weeks);
+  $('fFrom').value = weeks[0]; $('fTo').value = weeks[weeks.length - 1];
+  opts($('fOpp'), D.opponents, 'All teams');
+  $('fVenue').value = ''; $('fOpp').value = '';
+  F.from = null; F.to = null; F.venue = ''; F.opp = '';
+}
+function readFilters() {
+  const w = D.playedWeeks; let a = +$('fFrom').value, b = +$('fTo').value;
+  if (a > b) [a, b] = [b, a];
+  F.from = w.length && a === w[0] ? null : a; F.to = w.length && b === w[w.length - 1] ? null : b;
+  F.venue = $('fVenue').value; F.opp = $('fOpp').value;
+}
+
+const COLS = [
+  { k: 'player', t: 'Player', txt: true }, { k: 'apps', t: 'Played' }, { k: 'tons', t: 'Tons', bar: true },
+  { k: 'perMatch', t: 'Tons per match' }, { k: 'best', t: 'Highest ton' }, { k: 'n180', t: '180s' },
+  { k: 'tonco', t: '100+ checkouts' }, { k: 'mvp', t: 'MVP wins' }, { k: 'points', t: 'MVP points' },
+];
+
+function renderBoard(recs) {
+  if (!recs.length) return '<div class="empty">No matches match these filters.</div>';
+  const ag = aggregate(recs, D);
+  ag.sort((a, b) => {
+    const x = a[sort.key], y = b[sort.key];
+    const c = typeof x === 'string' ? x.localeCompare(y) : x - y;
+    return (c * sort.dir) || (b.points - a.points) || a.player.localeCompare(b.player);
+  });
+  const maxT = Math.max(1, ...ag.map(a => a.tons));
+  const arrow = k => sort.key === k ? (sort.dir < 0 ? ' ▼' : ' ▲') : '';
+  let h = '<div class="tablewrap"><table class="data"><thead><tr>' + COLS.map(c =>
+    '<th class="' + (c.txt ? '' : 'n') + '" aria-sort="' + (sort.key === c.k ? (sort.dir < 0 ? 'descending' : 'ascending') : 'none') + '"><button type="button" data-sort="' + c.k + '">' + esc(c.t) + arrow(c.k) + '</button></th>').join('') + '</tr></thead><tbody>';
+  for (const a of ag) {
+    h += '<tr><td><button type="button" class="linkbtn" data-player="' + esc(a.player) + '" style="background:none;border:0;padding:0;font-weight:600;color:var(--green);cursor:pointer;text-decoration:underline">' + esc(a.player) + '</button></td>' +
+      '<td class="n">' + a.apps + '</td><td class="n bar" style="--p:' + Math.round(a.tons / maxT * 100) + '%">' + a.tons + '</td>' +
+      '<td class="n">' + a.perMatch + '</td><td class="n">' + (a.best || '–') + '</td><td class="n">' + a.n180 + '</td><td class="n">' + a.tonco + '</td>' +
+      '<td class="n">' + a.mvp + '</td><td class="n">' + a.points + '</td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+
+function renderMVP(recs) {
+  const weeks = [...new Set(recs.map(r => r.week))].sort((a, b) => b - a);
+  if (!weeks.length) return '<div class="empty">No matches match these filters.</div>';
+  return weeks.map((w, i) => {
+    const win = D.winners[w], fx = D.fixtureByWeek[w];
+    if (!win) return '<details class="wk"><summary><span class="w">Week ' + w + '</span><span>' + esc(fx.opp) + ' (' + esc(fx.venue.toLowerCase()) + ')</span><span class="who muted">No MVP</span><span></span></summary></details>';
+    return '<details class="wk"' + (i === 0 ? ' open' : '') + '><summary><span class="w">Week ' + w + '</span><span>' + esc(fx.opp) + ' (' + esc(fx.venue.toLowerCase()) + ')</span>' +
+      '<span class="who">' + esc(win.names.join(' & ')) + '<span class="pill">MVP</span></span><span class="pts">' + win.score + '</span></summary>' +
+      '<div class="tablewrap">' + tableHTML(['Player', 'Tons', 'Ton scores', 'Points'], win.ranking.map(r => [r.player, r.tons.length, r.tons.join(', ') || '–', r.score]), [1, 3]).replace('<table>', '<table class="data">') + '</div></details>';
+  }).join('');
+}
+
+function renderPlayer(recs) {
+  const names = D.players;
+  if (!names.length) return '<div class="empty">No player data yet.</div>';
+  if (!selPlayer || !names.includes(selPlayer)) {
+    const ag = aggregate(D.records, D).sort((a, b) => b.tons - a.tons); selPlayer = ag[0].player;
+  }
+  const pr = recs.filter(r => r.player === selPlayer).sort((a, b) => a.week - b.week);
+  const a = aggregate(pr, D)[0];
+  let h = '<div class="playerpick"><label>Player<select id="pSel">' + names.map(n => '<option' + (n === selPlayer ? ' selected' : '') + '>' + esc(n) + '</option>').join('') + '</select></label>';
+  if (a) h += '<div class="stats"><div><b>' + a.apps + '</b><span>Played</span></div><div><b>' + a.tons + '</b><span>Tons</span></div><div><b>' + (a.best || '–') + '</b><span>Highest ton</span></div><div><b>' + a.n180 + '</b><span>180s</span></div><div><b>' + a.mvp + '</b><span>MVP wins</span></div><div><b>' + a.points + '</b><span>MVP points</span></div></div>';
+  h += '</div>';
+  if (!pr.length) return h + '<div class="empty">' + esc(selPlayer) + ' has no appearances with these filters.</div>';
+  h += '<div class="tablewrap"><table class="data"><thead><tr><th class="n">Week</th><th>Opposition</th><th>Venue</th><th class="n">Tons</th><th>Ton scores</th><th>Checkouts</th><th class="n">Points</th><th></th></tr></thead><tbody>';
+  for (const r of pr) {
+    const win = D.winners[r.week] && D.winners[r.week].names.includes(r.player);
+    h += '<tr><td class="n">' + r.week + '</td><td>' + esc(r.opp) + '</td><td>' + esc(r.venue) + '</td><td class="n">' + r.tons.length + '</td><td>' + esc(r.tons.join(', ') || '–') + '</td><td>' + esc(r.checkouts.join(', ') || '–') + '</td><td class="n">' + r.score + '</td><td>' + (win ? '<span class="pill">MVP</span>' : '') + '</td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+
+function renderFixtures() {
+  let h = '<div class="tablewrap"><table class="data"><thead><tr><th class="n">Week</th><th>Opposition</th><th>Venue</th><th>Status</th><th>MVP</th></tr></thead><tbody>';
+  for (const f of D.fixtures) {
+    const played = D.playedWeeks.includes(f.week), w = D.winners[f.week];
+    const status = f.bye ? 'No game' : played ? 'Played' : 'Not yet played';
+    h += '<tr' + (f.bye ? ' class="muted"' : '') + '><td class="n">' + f.week + '</td><td>' + esc(f.bye ? '–' : f.opp) + '</td><td>' + esc(f.bye ? '' : f.venue) + '</td><td>' + status + '</td><td>' + (w ? esc(w.names.join(' & ')) + ' (' + w.score + ')' : '') + '</td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+
+function renderTab() {
+  const recs = pick(D.records, F), p = $('panel');
+  p.innerHTML = tab === 'board' ? renderBoard(recs) : tab === 'mvp' ? renderMVP(recs) : tab === 'player' ? renderPlayer(recs) : renderFixtures();
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+}
+
+/* ============ events ============ */
+$('askform').addEventListener('submit', e => { e.preventDefault(); run($('q').value); });
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) { tab = b.dataset.tab; renderTab(); } });
+['fFrom', 'fTo', 'fVenue', 'fOpp'].forEach(id => $(id).addEventListener('change', () => { readFilters(); renderTab(); }));
+$('fReset').addEventListener('click', () => { renderFilters(); renderTab(); });
+$('panel').addEventListener('click', e => {
+  const s = e.target.closest('button[data-sort]');
+  if (s) { const k = s.dataset.sort; sort = sort.key === k ? { key: k, dir: -sort.dir } : { key: k, dir: k === 'player' ? 1 : -1 }; renderTab(); return; }
+  const p = e.target.closest('button[data-player]');
+  if (p) { selPlayer = p.dataset.player; tab = 'player'; renderTab(); }
+});
+$('panel').addEventListener('change', e => { if (e.target.id === 'pSel') { selPlayer = e.target.value; renderTab(); } });
+
+$('file').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const st = $('status'); st.className = ''; st.textContent = 'Reading ' + file.name + '…';
+  try {
+    if (!window.XLSX) throw new Error('The spreadsheet reader did not load. Check your internet connection and try again.');
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const name = wb.SheetNames.find(n => n.toLowerCase() === 'master') || wb.SheetNames[0];
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+    D = build(raw);
+    const m = file.name.match(/(\d{2})[_-](\d{2})/); if (m) season = '20' + m[1] + '/' + m[2];
+    selPlayer = null; $('answer').innerHTML = '';
+    renderHead(); renderFilters(); renderTab();
+    st.textContent = 'Loaded ' + file.name + ' (sheet "' + name + '").';
+  } catch (err) { st.className = 'err'; st.textContent = err.message; }
+  e.target.value = '';
+});
+
+/* ============ start ============ */
+$('examples').replaceWith(exampleList(EXAMPLES));
+renderHead(); renderFilters(); renderTab();
+</script>
+</body>
+</html>
